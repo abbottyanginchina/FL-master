@@ -74,6 +74,7 @@ if __name__ == '__main__':
     if args.all_clients: 
         print("Aggregation over all clients")
         w_locals = [w_glob for i in range(args.num_users)]
+        
     for iter in range(args.epochs):
         loss_locals = []
         if not args.all_clients:
