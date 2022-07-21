@@ -70,28 +70,49 @@ if __name__ == '__main__':
     net_best = None
     best_loss = None
     val_acc_list, net_list = [], []
+    loss_diff_list =  []
 
     if args.all_clients: 
         print("Aggregation over all clients")
         w_locals = [w_glob for i in range(args.num_users)]
-        
+
+    #初始化的 global loss
+    loss_avg = args.loss_avg
+
+    #定义loss列表, 初始化全为 0
+    loss_records = [[0 for i in range(args.epochs)] for j in range(args.num_users)]
+
     for iter in range(args.epochs):
         loss_locals = []
         if not args.all_clients:
             w_locals = []
+
+        #至少选择一个节点 args.frac为选择节点率
         m = max(int(args.frac * args.num_users), 1)
+        #被选中的节点
         idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        for idx in idxs_users:
-            local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx])
-            w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device))
+
+
+        #通过改变epoch的值来调节每个节点的quality
+        quality = 10
+
+        # 修改 update
+        for idx in idxs_users.tolist():
+            # dict_users 为 image index
+            local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx], loss_global=loss_avg, quality = quality)
+            w, loss, loss_diff = local.train(net=copy.deepcopy(net_glob).to(args.device))
             if args.all_clients:
                 w_locals[idx] = copy.deepcopy(w)
             else:
                 w_locals.append(copy.deepcopy(w))
+
             loss_locals.append(copy.deepcopy(loss))
+
+            #将 loss 值之差赋值
+            loss_records[idx][iter] = loss_diff
+
         # update global weights
         w_glob = FedAvg(w_locals)
-
         # copy weight to net_glob
         net_glob.load_state_dict(w_glob)
 

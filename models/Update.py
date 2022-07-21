@@ -22,13 +22,17 @@ class DatasetSplit(Dataset):
         image, label = self.dataset[self.idxs[item]]
         return image, label
 
-
+'''
+idx:为user index
+'''
 class LocalUpdate(object):
-    def __init__(self, args, dataset=None, idxs=None):
+    def __init__(self, args, dataset=None, idxs=None, loss_global=None, quality=None):
         self.args = args
         self.loss_func = nn.CrossEntropyLoss()
         self.selected_clients = []
         self.ldr_train = DataLoader(DatasetSplit(dataset, idxs), batch_size=self.args.local_bs, shuffle=True)
+        self.loss_global = loss_global
+        self.quality = quality
 
     def train(self, net):
         net.train()
@@ -36,7 +40,8 @@ class LocalUpdate(object):
         optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
 
         epoch_loss = []
-        for iter in range(self.args.local_ep):
+        # for iter in range(self.args.local_ep):
+        for iter in range(self.quality):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
@@ -51,5 +56,12 @@ class LocalUpdate(object):
                                100. * batch_idx / len(self.ldr_train), loss.item()))
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
+
+        # 更新过后的 loss
+        updated_loss = sum(epoch_loss) / len(epoch_loss)
+
+        # 全局的loss 和 当前的loss值之差
+        loss_diff = self.loss_global - updated_loss
+
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), loss_diff
 
